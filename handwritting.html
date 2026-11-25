@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Handwriting Font Studio</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f4f8;
+  color: #25263a;
+}
+
+header {
+  background: #24264b;
+  color: white;
+  padding: 22px;
+  text-align: center;
+}
+
+header h1 {
+  margin: 0 0 8px;
+}
+
+header p {
+  margin: 0;
+  color: #d8d9ef;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 25px auto;
+  padding: 15px;
+}
+
+.panel {
+  background: white;
+  padding: 20px;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  box-shadow: 0 3px 12px #0000000b;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+select, input, button {
+  font: inherit;
+  padding: 10px;
+  border: 1px solid #d5d6e2;
+  border-radius: 8px;
+}
+
+button {
+  cursor: pointer;
+  background: #f0f0f8;
+}
+
+button:hover {
+  background: #e0e1f3;
+}
+
+.primary {
+  background: #5555ce;
+  color: white;
+  border: none;
+}
+
+.primary:hover {
+  background: #4141ad;
+}
+
+#canvas {
+  width: 100%;
+  height: 340px;
+  display: block;
+  border: 2px solid #d8d9e5;
+  border-radius: 10px;
+  background: white;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+#preview {
+  max-width: 100%;
+  height: 100px;
+  display: block;
+  margin: 12px auto;
+}
+
+.status {
+  margin-top: 15px;
+  color: #555;
+}
+
+.progress {
+  height: 10px;
+  background: #e4e4ef;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#progressBar {
+  height: 100%;
+  width: 0%;
+  background: #5555ce;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.grid button {
+  font-size: 20px;
+  min-height: 48px;
+}
+
+.grid button.done {
+  background: #d9f5e6;
+  border-color: #75c99a;
+}
+
+.grid button.active {
+  background: #5555ce;
+  color: white;
+}
+
+.small {
+  color: #666;
+  font-size: 14px;
+}
+
+footer {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>My Handwriting Font Studio</h1>
+  <p>Draw your handwriting and download each letter as an SVG file.</p>
+</header>
+
+<div class="container">
+
+  <section class="panel">
+    <h2>1. Choose a character</h2>
+
+    <div class="controls">
+      <select id="character"></select>
+
+      <label>
+        Brush size
+        <input id="brush" type="range"
+          min="2" max="35" value="7">
+      </label>
+
+      <label>
+        Colour
+        <input id="colour" type="color" value="#111111">
+      </label>
+    </div>
+
+    <p class="small">
+      Draw the selected character inside the white box.
+      Use your mouse, finger or stylus.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Draw your character</h2>
+
+    <canvas id="canvas" width="1000" height="700"></canvas>
+
+    <div class="controls" style="margin-top:15px">
+      <button id="undo">Undo</button>
+      <button id="redo">Redo</button>
+      <button id="clear">Clear</button>
+
+      <label>
+        Reference image
+        <input id="reference" type="file" accept="image/*">
+      </label>
+    </div>
+
+    <p class="small">
+      The reference image is only a guide. It will not appear
+      in your exported SVG file.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>3. Preview and save</h2>
+
+    <div id="preview"></div>
+
+    <div class="controls">
+      <button class="primary" id="save">
+        Download current SVG
+      </button>
+
+      <button class="primary" id="saveAll">
+        Download completed SVGs
+      </button>
+    </div>
+
+    <p class="status" id="status">Ready to draw.</p>
+
+    <div class="progress">
+      <div id="progressBar"></div>
+    </div>
+
+    <p id="progressText" class="small">0 characters completed</p>
+  </section>
+
+  <section class="panel">
+    <h2>4. Your character collection</h2>
+    <p class="small">
+      Green characters are completed. Click any character to edit it.
+    </p>
+    <div class="grid" id="grid"></div>
+  </section>
+
+</div>
+
+<footer>
+  My Handwriting Font Studio · SVG Letter Creator
+</footer>
+
+<script>
+const characters = [
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  ..."abcdefghijklmnopqrstuvwxyz",
+  ..."0123456789",
+  ".", ",", "!", "?", "'", '"',
+  ":", ";", "-", "_", "(", ")"
+];
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const characterSelect = document.getElementById("character");
+const brushInput = document.getElementById("brush");
+const colourInput = document.getElementById("colour");
+const status = document.getElementById("status");
+const preview = document.getElementById("preview");
+const grid = document.getElementById("grid");
+
+let currentCharacter = "A";
+let drawings = {};
+let history = [];
+let redoHistory = [];
+let currentStroke = null;
+let referenceImage = null;
+let drawing = false;
+
+characters.forEach(char => {
+  const option = document.createElement("option");
+  option.value = char;
+  option.textContent = char;
+  characterSelect.appendChild(option);
+});
+
+function getDrawing() {
+  if (!drawings[currentCharacter]) {
+    drawings[currentCharacter] = [];
+  }
+  return drawings[currentCharacter];
+}
+
+function pointFromEvent(event) {
+  const rect = canvas.getBoundingClientRect();
+
+  return {
+    x: (event.clientX - rect.left) *
+       canvas.width / rect.width,
+    y: (event.clientY - rect.top) *
+       canvas.height / rect.height
+  };
+}
+
+function startDrawing(event) {
+  event.preventDefault();
+  drawing = true;
+
+  canvas.setPointerCapture(event.pointerId);
+
+  const point = pointFromEvent(event);
+
+  currentStroke = {
+    colour: colourInput.value,
+    width: Number(brushInput.value),
+    points: [point]
+  };
+
+  getDrawing().push(currentStroke);
+  history.push(currentStroke);
+  redoHistory = [];
+
+  redraw();
+}
+
+function continueDrawing(event) {
+  if (!drawing || !currentStroke) return;
+
+  event.preventDefault();
+
+  currentStroke.points.push(pointFromEvent(event));
+  redraw();
+}
+
+function stopDrawing() {
+  if (!drawing) return;
+
+  drawing = false;
+  currentStroke = null;
+
+  updatePreview();
+  updateProgress();
+}
+
+function drawStroke(stroke) {
+  const points = stroke.points;
+  if (!points.length) return;
+
+  ctx.strokeStyle = stroke.colour;
+  ctx.fillStyle = stroke.colour;
+  ctx.lineWidth = stroke.width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (points.length === 1) {
+    ctx.beginPath();
+    ctx.arc(
+      points[0].x,
+      points[0].y,
+      stroke.width / 2,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+    return;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const midX = (points[i].x + points[i + 1].x) / 2;
+    const midY = (points[i].y + points[i + 1].y) / 2;
+
+    ctx.quadraticCurveTo(
+      points[i].x,
+      points[i].y,
+      midX,
+      midY
+    );
+  }
+
+  const last = points[points.length - 1];
+  ctx.lineTo(last.x, last.y);
+  ctx.stroke();
+}
+
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (referenceImage) {
+    const scale = Math.min(
+      canvas.width / referenceImage.width,
+      canvas.height / referenceImage.height
+    );
+
+    const width = referenceImage.width * scale;
+    const height = referenceImage.height * scale;
+
+    ctx.globalAlpha = 0.25;
+    ctx.drawImage(
+      referenceImage,
+      (canvas.width - width) / 2,
+      (canvas.height - height) / 2,
+      width,
+      height
+    );
+    ctx.globalAlpha = 1;
+  }
+
+  getDrawing().forEach(drawStroke);
+}
+
+function makeSVG(char) {
+  const strokes = drawings[char] || [];
+
+  let paths = "";
+
+  strokes.forEach(stroke => {
+    const points = stroke.points;
+    if (!points.length) return;
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const midX = (points[i].x + points[i + 1].x) / 2;
+      const midY = (points[i].y + points[i + 1].y) / 2;
+
+      d += ` Q ${points[i].x} ${points[i].y} ${midX} ${midY}`;
+    }
+
+    if (points.length > 1) {
+      const last = points[points.length - 1];
+      d += ` L ${last.x} ${last.y}`;
+    }
+
+    paths += `<path d="${d}" fill="none" stroke="${stroke.colour}" stroke-width="${stroke.width}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  });
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="1000" height="700"
+         viewBox="0 0 1000 700">
+      ${paths}
+    </svg>`;
+}
+
+function downloadFile(filename, content) {
+  const blob = new Blob([content], {
+    type: "image/svg+xml;charset=utf-8"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function filenameFor(char) {
+  const names = {
+    ".": "period",
+    ",": "comma",
+    "!": "exclamation",
+    "?": "question",
+    "'": "apostrophe",
+    '"': "quotation",
+    ":": "colon",
+    ";": "semicolon",
+    "-": "hyphen",
+    "_": "underscore",
+    "(": "left_parenthesis",
+    ")": "right_parenthesis"
+  };
+
+  return names[char] || char;
+}
+
+function updatePreview() {
+  preview.innerHTML = makeSVG(currentCharacter);
+}
+
+function updateProgress() {
+  const completed = characters.filter(char =>
+    drawings[char] && drawings[char].length > 0
+  ).length;
+
+  document.getElementById("progressBar").style.width =
+    (completed / characters.length * 100) + "%";
+
+  document.getElementById("progressText").textContent =
+    `${completed} / ${characters.length} characters completed`;
+
+  grid.querySelectorAll("button").forEach(button => {
+    const char = button.dataset.char;
+    button.classList.toggle(
+      "done",
+      !!(drawings[char] && drawings[char].length)
+    );
+  });
+}
+
+function loadCharacter(char) {
+  currentCharacter = char;
+  characterSelect.value = char;
+
+  referenceImage = null;
+  document.getElementById("reference").value = "";
+
+  redraw();
+  updatePreview();
+
+  grid.querySelectorAll("button").forEach(button => {
+    button.classList.toggle(
+      "active",
+      button.dataset.char === char
+    );
+  });
+
+  status.textContent = `Drawing character: ${char}`;
+}
+
+characters.forEach(char => {
+  const button = document.createElement("button");
+
+  button.textContent = char;
+  button.dataset.char = char;
+
+  button.addEventListener("click", () => loadCharacter(char));
+
+  grid.appendChild(button);
+});
+
+canvas.addEventListener("pointerdown", startDrawing);
+canvas.addEventListener("pointermove", continueDrawing);
+canvas.addEventListener("pointerup", stopDrawing);
+canvas.addEventListener("pointercancel", stopDrawing);
+
+characterSelect.addEventListener("change", () => {
+  loadCharacter(characterSelect.value);
+});
+
+document.getElementById("undo").addEventListener("click", () => {
+  const drawing = getDrawing();
+  if (!drawing.length) return;
+
+  redoHistory.push(drawing.pop());
+  redraw();
+  updatePreview();
+  updateProgress();
+});
+
+document.getElementById("redo").addEventListener("click", () => {
+  if (!redoHistory.length) return;
+
+  getDrawing().push(redoHistory.pop());
+  redraw();
+  updatePreview();
+  updateProgress();
+});
+
+document.getElementById("clear").addEventListener("click", () => {
+  drawings[currentCharacter] = [];
+  redoHistory = [];
+
+  redraw();
+  updatePreview();
+  updateProgress();
+
+  status.textContent = "Character cleared.";
+});
+
+document.getElementById("save").addEventListener("click", () => {
+  const drawing = getDrawing();
+
+  if (!drawing.length) {
+    status.textContent = "Draw a character before saving.";
+    return;
+  }
+
+  downloadFile(
+    filenameFor(currentCharacter) + ".svg",
+    makeSVG(currentCharacter)
+  );
+
+  status.textContent = currentCharacter + ".svg downloaded.";
+});
+
+document.getElementById("saveAll").addEventListener("click", () => {
+  const completed = characters.filter(char =>
+    drawings[char] && drawings[char].length
+  );
+
+  if (!completed.length) {
+    status.textContent = "Draw some characters first.";
+    return;
+  }
+
+  completed.forEach((char, index) => {
+    setTimeout(() => {
+      downloadFile(
+        filenameFor(char) + ".svg",
+        makeSVG(char)
+      );
+    }, index * 300);
+  });
+
+  status.textContent =
+    "Downloading " + completed.length + " SVG files. Allow multiple downloads if asked.";
+});
+
+document.getElementById("reference").addEventListener("change", event => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    referenceImage = new Image();
+
+    referenceImage.onload = redraw;
+    referenceImage.src = reader.result;
+  };
+
+  reader.readAsDataURL(file);
+});
+
+loadCharacter("A");
+updateProgress();
+</script>
+
+</body>
+</html>
